@@ -1,0 +1,19 @@
+# IDE and OS
+.idea/
+*.iml
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+
+# Generated app data
+*.csv
+info.txt
+
+# Scratch / local-only scripts
+tempCodeRunnerFile.py
+example.py
+transaction.py
+
+
