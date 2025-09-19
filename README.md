@@ -102,9 +102,15 @@ Reference selection
 
 Index and deflators
 
-- Build a monthly CPI index starting from the earliest transaction month as base (index = 1)
-- For month m with monthly rate r_m (%): I_m = I_{m-1} × (1 + r_m/100)
-- Deflator for month m: D_m = 1 / I_m (base month has D = 1)
+- En erken işlem yapılan ayı “baz ay” olarak seçiyoruz.
+- Baz ayın endeksini 1.00 kabul ediyoruz. (Bu, o ayın satın alma gücünü referans alır.)
+- Sonraki her ay için: o aya ait enflasyon oranını (r%) alıp bir önceki endeksle çarpıyoruz.
+  - Formül: I_m = I_{m-1} × (1 + r/100)
+  - Küçük örnek: Baz = 1.00, sonraki ay %2 → 1.00 × 1.02 = 1.02; onun ertesi ay %3 → 1.02 × 1.03 ≈ 1.0506
+- Deflatör, nominal parayı “baz ayın alım gücüne” çevirmek için kullandığımız katsayıdır.
+  - Formül: D_m = 1 / I_m (baz ayda D = 1.00)
+  - Örnek: I_m ≈ 1.0506 ise D_m ≈ 0.9518; 1000 nominal para baz aya göre ≈ 951.8 “reel” para eder.
+- İşlem tutarlarını gerçekleştiği ayın deflatörüyle, güncel portföyü de bugünkü ayın deflatörüyle çarparız.
 
 Cash flows (real terms)
 
