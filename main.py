@@ -722,7 +722,7 @@ def get_current_dollar_rate_interactive() -> Decimal | None:
     return rate
 
 
-def prompt_current_prices_for_shares(reference_country: str) -> tuple[list[dict], Decimal | None]:
+def prompt_current_prices_for_shares(reference_country: str) -> tuple[list[dict] | None, Decimal | None]:
     rows = []
     with open('shares.csv', mode='r', newline='') as f:
         reader = csv.DictReader(f)
@@ -759,13 +759,13 @@ def prompt_current_prices_for_shares(reference_country: str) -> tuple[list[dict]
         if any(p['native_country'] == 'US' for p in current_prices):
             usdtry = get_current_dollar_rate_interactive()
             if usdtry is None:
-                return [], None
+                return None, None
     else:
         # reference US; need USD/TRY for TR shares
         if any(p['native_country'] == 'TR' for p in current_prices):
             usdtry = get_current_dollar_rate_interactive()
             if usdtry is None:
-                return [], None
+                return None, None
 
     for p in current_prices:
         if reference_country == 'TR':
