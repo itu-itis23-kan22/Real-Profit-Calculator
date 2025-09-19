@@ -66,7 +66,7 @@ def show_stocks():
             print('Unexpected country name has been detected.')
             usd_price = tr_price = Decimal('0')
 
-        print(f"|{share['share_name']:^10}|{qty:^8.1f}|{usd_price:^12.4f}|{tr_price:^12.4f}|")
+        print(f"|{share['share_name']:^10}|{qty:^8.4f}|{usd_price:^12.4f}|{tr_price:^12.4f}|")
         dollar_sum += usd_price
 
     print(f"|{'Total':^10}|{'----':^8}|{round_money(dollar_sum):^12.4f}|{round_money(dollar_sum*dollar):^12.4f}|")
