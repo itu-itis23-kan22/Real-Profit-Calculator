@@ -9,7 +9,8 @@ from decimal import Decimal, ROUND_HALF_EVEN
 
 #to - do
 
-# there is a proplem in show_stocks function. It is not showing the correct number of shares.
+# there is a proplem in show_stocks function. It is not showing the correct number of shares. It is rounding the number of shares.
+# Fees not included in cash flows
 # editing past transactions: User will select what he/se wants to edit.
 # duplicated code
 
@@ -46,7 +47,7 @@ def show_stocks():
         print("Failed to get the dollar value.")
         return
 
-    print('-' * 46)
+    print('_' * 46)
     print(f"|Share Name|Quantity|Dollar Value|  TL Value  |")
 
     dollar_sum = Decimal('0')
@@ -69,6 +70,18 @@ def show_stocks():
         dollar_sum += usd_price
 
     print(f"|{'Total':^10}|{'----':^8}|{round_money(dollar_sum):^12.4f}|{round_money(dollar_sum*dollar):^12.4f}|")
+    print('¯' * 46)
+    while True:
+        is_continue = input("If you want to continue, press Y. Press 0 to exit: ").upper()
+        if is_continue == 'Y':
+            router()
+            return
+        elif is_continue == '0':
+            print('Exiting...')
+            load_bar()
+            return
+        else:
+            print('You can only enter Y or 0.')
 
 
 def is_valid_date(date_str: str) -> bool:
@@ -107,7 +120,7 @@ def get_dollar() -> Decimal:
 
 
 def load_bar():
-    for i in range(0):
+    for i in range(0): # 74 is the length of the load bar
         print("-", end="", flush=True)
         time.sleep(0.05)
     print()
@@ -829,10 +842,40 @@ def calculate_reel_profit():
         else:
             # Unknown type, skip
             continue
-        real_amount = round_money(amount_ref * get_deflator(y, m))
+        deflator = get_deflator(y, m)
+        real_amount = round_money(amount_ref * deflator)
         total_real_cashflows += real_amount
         if real_amount < 0:
             invested_real_abs += (-real_amount)
+
+        # Include transaction fee as an additional negative cash flow
+        try:
+            fee_native = Decimal(str(op['transaction_fee']).strip())
+        except Exception:
+            fee_native = Decimal('0')
+        if fee_native != 0:
+            op_ccy = op['currency'].strip().upper()
+            try:
+                rate = Decimal(str(op['exchange_rate']).strip())
+            except Exception:
+                rate = None
+
+            # Convert fee to reference currency
+            if op_ccy == ref_ccy:
+                fee_ref = fee_native
+            elif op_ccy == 'USD' and ref_ccy == 'TL' and rate is not None and rate != 0:
+                fee_ref = round_money(fee_native * rate)
+            elif op_ccy == 'TL' and ref_ccy == 'USD' and rate is not None and rate != 0:
+                fee_ref = round_money(fee_native / rate)
+            else:
+                # Fallback: if rate missing, skip fee conversion for safety
+                fee_ref = None
+
+            if fee_ref is not None:
+                fee_real = round_money((-fee_ref) * deflator)
+                total_real_cashflows += fee_real
+                if fee_real < 0:
+                    invested_real_abs += (-fee_real)
 
     # 6) Current portfolio nominal value in reference currency
     current_prices, usdtry = prompt_current_prices_for_shares(ref_country)
@@ -911,7 +954,7 @@ def router():
             load_bar()
 
         else:
-            print("Please enter a valid number. (0- 4)")
+            print("Please enter a valid number. (0-5)")
             router()
 
 
