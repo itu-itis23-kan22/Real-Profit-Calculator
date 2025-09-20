@@ -9,13 +9,13 @@ from decimal import Decimal, ROUND_HALF_EVEN, InvalidOperation
 
 #to - do
 
-
+# edit ask_price because it is not showing the stock name while asking the price.
 # editing past transactions: User will select what he/se wants to edit. 
 # duplicated code
 
 def ask_price(country: str, symbol: str) -> Decimal | None:
     while True:
-        choice = input("How do you want to get the price? Auto (A) / Manual (M) / Cancel (0): ").strip().upper()
+        choice = input(f"How do you want to get the price for {symbol}? Auto (A) / Manual (M) / Cancel (0): ").strip().upper()
         if choice == 'A':
             price = get_share_price(country, symbol)
             if price is not None:
@@ -24,7 +24,7 @@ def ask_price(country: str, symbol: str) -> Decimal | None:
             continue
         elif choice == 'M':
             while True:
-                raw = input("Enter the price: ").strip().replace(',', '.')
+                raw = input(f"Enter the price for {symbol}: ").strip().replace(',', '.')
                 try:
                     price = Decimal(raw)
                     if price > 0:
@@ -132,7 +132,7 @@ def show_stocks():
             if price is not None:
                 rows.append(share)
             else:
-                print("Failed to get the price. Thus, the share will be excluded from the list.")
+                print(f"Failed to get the price for {share['share_name']}. This share will be excluded from the list.")
 
     dollar = get_dollar() # type: get_dollar() -> Decimal
     if dollar is None:
