@@ -4,15 +4,109 @@ import csv
 import requests
 from lxml import html
 import os
-from decimal import Decimal, ROUND_HALF_EVEN
+from decimal import Decimal, ROUND_HALF_EVEN, InvalidOperation
 
 
 #to - do
 
-# there is a proplem in show_stocks function. It is not showing the correct number of shares. It is rounding the number of shares.
-# Fees not included in cash flows
-# editing past transactions: User will select what he/se wants to edit.
+
+# editing past transactions: User will select what he/se wants to edit. 
 # duplicated code
+
+def ask_price(country: str, symbol: str) -> Decimal | None:
+    while True:
+        choice = input("How do you want to get the price? Auto (A) / Manual (M) / Cancel (0): ").strip().upper()
+        if choice == 'A':
+            price = get_share_price(country, symbol)
+            if price is not None:
+                return price
+            print("Failed to fetch automatically. Choose Manual (M) or try again.")
+            continue
+        elif choice == 'M':
+            while True:
+                raw = input("Enter the price: ").strip().replace(',', '.')
+                try:
+                    price = Decimal(raw)
+                    if price > 0:
+                        return price
+                    print("Price must be greater than 0.")
+                except (InvalidOperation, ValueError):
+                    print("Invalid price. Please enter a valid number.")
+        elif choice == '0':
+            return None
+        else:
+            print("Invalid choice. Please enter A, M, or 0.")
+
+
+def get_share_price_tr(name: str) -> Decimal | None:
+    name = name.strip().upper()
+    referer = f"https://www.isyatirim.com.tr/tr-tr/analiz/hisse/Sayfalar/sirket-karti.aspx?hisse={name}"
+    one_endeks_url = f"https://www.isyatirim.com.tr/_layouts/15/Isyatirim.Website/Common/Data.aspx/OneEndeks?endeks={name}"
+    session = requests.Session()
+    ua = "Mozilla/5.0"
+    try:
+        session.get(referer, headers={"User-Agent": ua}, timeout=10)
+        headers = {
+            "User-Agent": ua,
+            "Accept": "application/json, text/plain, */*",
+            "Referer": referer,
+            "X-Requested-With": "XMLHttpRequest",
+        }
+        resp = session.get(one_endeks_url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        return None
+
+    row = data[0] if isinstance(data, list) and data else (data if isinstance(data, dict) else None)
+    if not row or row.get("symbol") != name:
+        return None
+    last_value = row.get("last")
+    if last_value is None:
+        return None
+    try:
+        return Decimal(str(last_value).replace(',', '.'))
+    except Exception:
+        return None
+
+
+def get_share_price_us(name: str) -> Decimal | None:
+    name = name.strip().upper()
+    base_url = 'https://www.cnbc.com/quotes/'
+    url = base_url + name
+    headers = { 'User-Agent': 'Mozilla/5.0' }
+    try:
+        response = requests.get(url=url, headers=headers, timeout=10)
+        response.raise_for_status()
+        tree = html.fromstring(response.content)
+        value_list = tree.xpath('//span[@class="QuoteStrip-lastPrice"]/text()')
+    except Exception:
+        return None
+    if not value_list:
+        return None
+    raw = value_list[0].strip()
+    # Clean formats like "$ 123.45" or "," thousands
+    cleaned = raw.replace(',', '')
+    if cleaned.startswith('$'):
+        cleaned = cleaned.lstrip('$').strip()
+    try:
+        return Decimal(cleaned)
+    except Exception:
+        # Fallback: handle TR-style comma decimal
+        try:
+            return Decimal(raw.replace('.', '').replace(',', '.'))
+        except Exception:
+            return None
+
+
+def get_share_price(country: str, name: str) -> Decimal | None:
+    if country == 'US':
+        return get_share_price_us(name)
+    elif country == 'TR':
+        return get_share_price_tr(name)
+    else:
+        raise ValueError(f"Invalid country: {country}")
+
 
 def round_money(value: Decimal, places: int = 4) -> Decimal:
     quant = Decimal('1').scaleb(-places)  # 0.0001
@@ -33,14 +127,12 @@ def show_stocks():
     with open('shares.csv', mode='r', newline='') as f:
         reader = csv.DictReader(f)
         for share in reader:
-            while True:
-                try:
-                    price = float(input(f"What is the current price of share of {share['share_name']} (eg. 19.5): "))
-                    break
-                except ValueError:
-                    print("Invalid price, try again.")
+            price = ask_price(share['country_name'], share['share_name'])
             share['price'] = price
-            rows.append(share)
+            if price is not None:
+                rows.append(share)
+            else:
+                print("Failed to get the price. Thus, the share will be excluded from the list.")
 
     dollar = get_dollar() # type: get_dollar() -> Decimal
     if dollar is None:
@@ -54,7 +146,7 @@ def show_stocks():
     for share in rows:
         qty = Decimal(str(share['quantity']))
         country = share['country_name'].upper()
-        price = Decimal(str(share['price']))
+        price = share['price']  # already Decimal
 
         if country == 'US':
             usd_price = round_money(qty * price)
@@ -328,20 +420,39 @@ def opr(country_name: str):
             router()
         elif choice == 1:
             try:
-
                 stock_name = input("Enter stock name: ").upper()
-                share_price = float(input("Enter share price: "))
-                number_of_shares = float(input("Enter number of shares: "))
-                transaction_fee = float(input("Enter transaction fee: "))
-                exchange_rate = float(input("Enter exchange rate, if you want to get it automatically enter 0: "))
-                if exchange_rate == 0:
+                share_price = ask_price(country_name, stock_name)
+                if share_price is None:
+                    print('Operation cancelled.')
+                    router()
+                    return
+                while True:
+                    try:
+                        number_of_shares = Decimal(input("Enter number of shares: ").strip().replace(',', '.'))
+                        break
+                    except (InvalidOperation, ValueError):
+                        print('Invalid number. Try again.')
+                while True:
+                    try:
+                        transaction_fee = Decimal(input("Enter transaction fee: ").strip().replace(',', '.'))
+                        break
+                    except (InvalidOperation, ValueError):
+                        print('Invalid fee. Try again.')
+                while True:
+                    try:
+                        ex_raw = input("Enter exchange rate, if you want to get it automatically enter 0: ").strip().replace(',', '.')
+                        exchange_rate = Decimal(ex_raw)
+                        break
+                    except (InvalidOperation, ValueError):
+                        print('Invalid rate. Try again.')
+                if exchange_rate == Decimal('0'):
                     exchange_rate = get_dollar()
                     if exchange_rate is None:
                         print("Failed to get the dollar value.")
                         return
                 while True:
                     currency = input("Enter currency: (tl, usd): ").upper()
-                    if currency == 'TL' or currency == 'USD':
+                    if currency in ('TL', 'USD'):
                         break
                     else:
                         print('You can only enter TL or USD')
@@ -368,22 +479,40 @@ def opr(country_name: str):
 
         elif choice == 2:
             read_shares_csv()
-
-
             try:
                 stock_name = input("Enter stock name: ").upper()
-                share_price = float(input("Enter share price: "))
-                number_of_shares = float(input("Enter number of shares: "))
-                transaction_fee = float(input("Enter transaction fee: "))
-                exchange_rate = float(input("Enter exchange rate, if you want to get it automatically enter 0: "))
-                if exchange_rate == 0:
+                share_price = ask_price(country_name, stock_name)
+                if share_price is None:
+                    print('Operation cancelled.')
+                    router()
+                    return
+                while True:
+                    try:
+                        number_of_shares = Decimal(input("Enter number of shares: ").strip().replace(',', '.'))
+                        break
+                    except (InvalidOperation, ValueError):
+                        print('Invalid number. Try again.')
+                while True:
+                    try:
+                        transaction_fee = Decimal(input("Enter transaction fee: ").strip().replace(',', '.'))
+                        break
+                    except (InvalidOperation, ValueError):
+                        print('Invalid fee. Try again.')
+                while True:
+                    try:
+                        ex_raw = input("Enter exchange rate, if you want to get it automatically enter 0: ").strip().replace(',', '.')
+                        exchange_rate = Decimal(ex_raw)
+                        break
+                    except (InvalidOperation, ValueError):
+                        print('Invalid rate. Try again.')
+                if exchange_rate == Decimal('0'):
                     exchange_rate = get_dollar()
                     if exchange_rate is None:
                         print("Failed to get the dollar value.")
                         return
                 while True:
                     currency = input("Enter currency: (tl, usd): ").upper()
-                    if currency == 'TL' or currency == 'USD':
+                    if currency in ('TL', 'USD'):
                         break
                     else:
                         print('You can only enter TL or USD')
@@ -407,7 +536,6 @@ def opr(country_name: str):
                 opr(country_name)
             else:
                 router()
-
         elif choice == 3: # Edit past transactions.
             operations =[]
             with open('operations.csv', mode='r', newline='') as f:
@@ -733,19 +861,14 @@ def prompt_current_prices_for_shares(reference_country: str) -> tuple[list[dict]
         return [], None
 
     usdtry = None
-    # Ask for current prices in native currency
     current_prices = []
     for share in rows:
         share_name = share['share_name']
         native_country = share['country_name'].strip().upper()
         qty = Decimal(str(share['quantity']))
-        while True:
-            try:
-                prompt_ccy = 'USD' if native_country == 'US' else 'TL'
-                price = Decimal(input(f"Current price for {share_name} (in {prompt_ccy}): ").strip().replace(',', '.'))
-                break
-            except Exception:
-                print("Invalid price, try again.")
+        price = ask_price(native_country, share_name)
+        if price is None:
+            return None, None
         current_prices.append({
             'share_name': share_name,
             'native_country': native_country,
@@ -753,15 +876,12 @@ def prompt_current_prices_for_shares(reference_country: str) -> tuple[list[dict]
             'native_price': price
         })
 
-    # Convert to reference currency
     if reference_country == 'TR':
-        # Need USD/TRY for US shares
         if any(p['native_country'] == 'US' for p in current_prices):
             usdtry = get_current_dollar_rate_interactive()
             if usdtry is None:
                 return None, None
     else:
-        # reference US; need USD/TRY for TR shares
         if any(p['native_country'] == 'TR' for p in current_prices):
             usdtry = get_current_dollar_rate_interactive()
             if usdtry is None:
@@ -919,7 +1039,7 @@ def calculate_reel_profit():
         print("Real ROI: N/A (no invested capital detected)")
     print('¯' * 64)
     router()
-    
+ 
     
 
 def router():
