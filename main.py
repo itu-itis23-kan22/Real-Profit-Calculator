@@ -1012,8 +1012,10 @@ def calculate_reel_profit():
     curr_deflator = get_deflator(curr_year, curr_month)
     portfolio_real = round_money(portfolio_nominal_ref * curr_deflator)
 
-    # 8) Real gain and ROI
+    # 8) Real gain and ROI (base-month purchasing power)
     real_gain = round_money(portfolio_real + total_real_cashflows)
+    # Convert real gain to today's purchasing power (scale by I(T) = 1 / D(T))
+    real_gain_today = round_money(real_gain / curr_deflator)
     if invested_real_abs > 0:
         real_roi = (real_gain / invested_real_abs) * Decimal('100')
     else:
@@ -1032,7 +1034,7 @@ def calculate_reel_profit():
     print(f"Real cash flows sum: {total_real_cashflows:.4f} {ref_ccy}")
     print(f"Current portfolio (nominal): {portfolio_nominal_ref:.4f} {ref_ccy}")
     print(f"Current portfolio (real): {portfolio_real:.4f} {ref_ccy}")
-    print(f"Real net gain: {real_gain:.4f} {ref_ccy}")
+    print(f"Real net gain: {real_gain_today:.4f} {ref_ccy} (in today's purchasing power)")
     if real_roi is not None:
         print(f"Real ROI: {real_roi:.2f}%  (on invested real capital {invested_real_abs:.4f} {ref_ccy})")
     else:
